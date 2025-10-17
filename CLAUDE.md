@@ -52,9 +52,14 @@ src/
 │   ├── components/        # Reusable Svelte components
 │   │   ├── UploadZone.svelte
 │   │   ├── FormatSelector.svelte
-│   │   └── PreviewPane.svelte
-│   └── converters/        # Conversion logic modules
-│       └── imageConverter.ts
+│   │   ├── PreviewPane.svelte
+│   │   └── AIRecommendation.svelte
+│   ├── converters/        # Conversion logic modules
+│   │   └── imageConverter.ts
+│   ├── services/          # External API integrations
+│   │   └── claudeAI.ts
+│   └── utils/             # Helper utilities
+│       └── imageAnalyzer.ts
 ├── routes/
 │   ├── +layout.svelte    # Root layout (imports app.css)
 │   └── +page.svelte      # Main application page
@@ -232,12 +237,155 @@ The architecture is designed for easy extension:
 - Object URLs must be revoked to prevent memory leaks
 - Preview images are kept at original size (consider downscaling for performance)
 
+## AI Features
+
+The app includes AI-powered features using Claude 3.5 Sonnet with vision capabilities.
+
+### Environment Setup
+
+Create a `.env` file in the project root:
+```bash
+VITE_CLAUDE_API_KEY=sk-ant-...
+```
+
+The app gracefully degrades when no API key is provided.
+
+### AI Architecture
+
+**Two-Stage Analysis Pipeline**:
+
+1. **Local Analysis** (`src/lib/utils/imageAnalyzer.ts`):
+   - Runs first, no API calls needed
+   - Detects transparency using alpha channel analysis
+   - Estimates color count via pixel sampling
+   - Provides heuristic recommendations as fallback
+
+2. **AI Enhancement** (`src/lib/services/claudeAI.ts`):
+   - Runs in parallel with format recommendation and alt text generation
+   - Uses Claude API with base64-encoded images
+   - Returns structured JSON responses
+
+### AI Features Flow
+
+```typescript
+// In +page.svelte
+async function handleFileUpload(event: CustomEvent<File>) {
+  selectedFile = event.detail;
+
+  if (isAIEnabled()) {
+    // 1. Local analysis (fast, synchronous)
+    const characteristics = await analyzeImage(selectedFile);
+
+    // 2. Parallel AI calls (slower, requires API)
+    const [recommendation, altText] = await Promise.all([
+      getFormatRecommendation(file, characteristics),
+      generateAltText(file)
+    ]);
+  }
+}
+```
+
+### AI Service Patterns
+
+**API Call Structure**:
+```typescript
+const response = await fetch('https://api.anthropic.com/v1/messages', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': CLAUDE_API_KEY,
+    'anthropic-version': '2023-06-01'
+  },
+  body: JSON.stringify({
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 1024,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: file.type, data: base64Image } },
+        { type: 'text', text: prompt }
+      ]
+    }]
+  })
+});
+```
+
+**Response Parsing**:
+```typescript
+const data = await response.json();
+const textContent = data.content[0].text;
+const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+return JSON.parse(jsonMatch[0]);
+```
+
+### Image Analysis Utilities
+
+**Transparency Detection**:
+```typescript
+function checkTransparency(imageData: ImageData): boolean {
+  const data = imageData.data;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return true; // Found semi-transparent pixel
+  }
+  return false;
+}
+```
+
+**Color Estimation** (sampled for performance):
+```typescript
+function estimateColorCount(imageData: ImageData): number {
+  const colors = new Set<string>();
+  const sampleRate = 10; // Every 10th pixel
+
+  for (let i = 0; i < data.length; i += 4 * sampleRate) {
+    colors.add(`${data[i]},${data[i+1]},${data[i+2]}`);
+    if (colors.size > 10000) return 10000; // Early exit
+  }
+
+  return Math.min(colors.size * sampleRate, 16777216);
+}
+```
+
+### AI Component
+
+**AIRecommendation.svelte** displays three states:
+1. **Loading**: Spinner with "AI Analyzing Image..."
+2. **Error**: Warning banner with setup instructions
+3. **Success**: Gradient cards showing recommendation, alt text, and smart filename
+
+**Props**:
+```typescript
+export let recommendation: AIAnalysisResult | null = null;
+export let isLoading: boolean = false;
+export let error: string = '';
+export let altText: string = '';
+export let suggestedFilename: string = '';
+```
+
+### Smart Filename Integration
+
+The download handler automatically uses AI-suggested filenames:
+```typescript
+function handleDownload() {
+  let filename: string;
+  if (altTextData?.suggestedFilename) {
+    const ext = getExtensionFromMimeType(targetFormat);
+    filename = `${altTextData.suggestedFilename}${ext}`;
+  } else {
+    filename = generateDownloadFilename(selectedFile.name, targetFormat);
+  }
+  downloadBlob(convertedBlob, filename);
+}
+```
+
 ## Known Limitations
 
 - GIF conversion loses animation (converts to static first frame)
 - No support for RAW camera formats (requires specialized libraries)
 - Canvas quality may not match professional tools for some formats
 - Browser memory limits apply (typically ~2GB per tab)
+- AI features require API key and internet connection
+- Large images may take several seconds for AI analysis
 
 1. First think through the problem, read the codebase for relevant files, and write a plan to tasks/todo.md.
 2. The plan should have a list of todo items that you can check off as you complete them

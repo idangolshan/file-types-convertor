@@ -2,11 +2,21 @@
 	import UploadZone from '$lib/components/UploadZone.svelte';
 	import FormatSelector from '$lib/components/FormatSelector.svelte';
 	import PreviewPane from '$lib/components/PreviewPane.svelte';
+	import AIRecommendation from '$lib/components/AIRecommendation.svelte';
 	import {
 		convertImage,
 		generateDownloadFilename,
 		downloadBlob
 	} from '$lib/converters/imageConverter';
+	import { analyzeImage } from '$lib/utils/imageAnalyzer';
+	import {
+		isAIEnabled,
+		getFormatRecommendation,
+		generateAltText,
+		type AIAnalysisResult,
+		type AltTextResult
+	} from '$lib/services/claudeAI';
+	import { getExtensionFromMimeType } from '$lib/converters/imageConverter';
 
 	let selectedFile: File | null = null;
 	let targetFormat: string = '';
@@ -14,19 +24,70 @@
 	let isConverting: boolean = false;
 	let errorMessage: string = '';
 
-	function handleFileUpload(event: CustomEvent<File>) {
+	// AI features
+	let aiRecommendation: AIAnalysisResult | null = null;
+	let altTextData: AltTextResult | null = null;
+	let isAnalyzing: boolean = false;
+	let aiError: string = '';
+
+	async function handleFileUpload(event: CustomEvent<File>) {
 		selectedFile = event.detail;
 		targetFormat = ''; // Reset format selection when new file is uploaded
 		convertedBlob = null; // Reset converted image
 		errorMessage = '';
-		console.log('File uploaded:', selectedFile);
+		aiRecommendation = null;
+		altTextData = null;
+		aiError = '';
+
+		// Only log in development mode
+		const DEBUG = import.meta.env.DEV;
+		if (DEBUG) console.log('File uploaded:', selectedFile.name, selectedFile.type);
+
+		// Start AI analysis if enabled
+		if (isAIEnabled()) {
+			analyzeWithAI(selectedFile);
+		} else {
+			aiError = 'AI features disabled. Add VITE_CLAUDE_API_KEY to your .env file to enable.';
+		}
+	}
+
+	async function analyzeWithAI(file: File) {
+		isAnalyzing = true;
+		aiError = '';
+
+		try {
+			// Analyze image characteristics locally
+			const characteristics = await analyzeImage(file);
+
+			// Get AI recommendations and alt text in parallel
+			const [recommendation, altText] = await Promise.all([
+				getFormatRecommendation(file, characteristics),
+				generateAltText(file)
+			]);
+
+			aiRecommendation = recommendation;
+			altTextData = altText;
+
+			// Only log in development mode
+			const DEBUG = import.meta.env.DEV;
+			if (DEBUG) console.log('AI Analysis complete');
+		} catch (error) {
+			aiError = error instanceof Error ? error.message : 'AI analysis failed';
+			// Only log in development mode
+			const DEBUG = import.meta.env.DEV;
+			if (DEBUG) console.error('AI analysis error:', error);
+		} finally {
+			isAnalyzing = false;
+		}
 	}
 
 	function handleFormatSelect(event: CustomEvent<string>) {
 		targetFormat = event.detail;
 		convertedBlob = null; // Reset converted image when format changes
 		errorMessage = '';
-		console.log('Target format:', targetFormat);
+		// Only log in development mode
+		const DEBUG = import.meta.env.DEV;
+		if (DEBUG) console.log('Target format:', targetFormat);
 	}
 
 	async function handleConvert() {
@@ -39,10 +100,14 @@
 			convertedBlob = await convertImage(selectedFile, targetFormat, {
 				quality: 0.92
 			});
-			console.log('Conversion successful!', convertedBlob);
+			// Only log in development mode
+			const DEBUG = import.meta.env.DEV;
+			if (DEBUG) console.log('Conversion successful!');
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Conversion failed';
-			console.error('Conversion error:', error);
+			// Only log in development mode
+			const DEBUG = import.meta.env.DEV;
+			if (DEBUG) console.error('Conversion error:', error);
 		} finally {
 			isConverting = false;
 		}
@@ -51,7 +116,15 @@
 	function handleDownload() {
 		if (!convertedBlob || !selectedFile) return;
 
-		const filename = generateDownloadFilename(selectedFile.name, targetFormat);
+		// Use smart filename if available, otherwise use default
+		let filename: string;
+		if (altTextData?.suggestedFilename) {
+			const ext = getExtensionFromMimeType(targetFormat);
+			filename = `${altTextData.suggestedFilename}${ext}`;
+		} else {
+			filename = generateDownloadFilename(selectedFile.name, targetFormat);
+		}
+
 		downloadBlob(convertedBlob, filename);
 	}
 </script>
@@ -60,8 +133,10 @@
 	<div class="max-w-4xl mx-auto">
 		<!-- Header -->
 		<div class="text-center mb-12">
-			<h1 class="text-5xl font-bold text-gray-900 mb-4">File Converter</h1>
-			<p class="text-xl text-gray-700">Transform your files with ease</p>
+			<h1 class="text-5xl font-bold text-gray-900 mb-4">
+				AI-Powered File Converter
+			</h1>
+			<p class="text-xl text-gray-700">Transform your files with intelligent recommendations</p>
 		</div>
 
 		<!-- Upload Zone -->
@@ -70,6 +145,15 @@
 		<!-- Preview, Format Selector & File Info -->
 		{#if selectedFile}
 			<div class="mt-8 space-y-6">
+				<!-- AI Recommendation Card -->
+				<AIRecommendation
+					recommendation={aiRecommendation}
+					isLoading={isAnalyzing}
+					error={aiError}
+					altText={altTextData?.description || ''}
+					suggestedFilename={altTextData?.suggestedFilename || ''}
+				/>
+
 				<!-- Preview Pane Card -->
 				<div class="bg-white rounded-lg shadow-lg p-6">
 					<PreviewPane

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
+	import { validateImageFile } from '$lib/utils/fileValidation';
 
 	const dispatch = createEventDispatcher<{ upload: File }>();
 
@@ -38,8 +39,8 @@
 		}
 	}
 
-	function handleFile(file: File) {
-		// Validate file type
+	async function handleFile(file: File) {
+		// Validate file type (MIME)
 		if (!acceptedTypes.includes(file.type)) {
 			alert(`Unsupported file type. Please upload: ${acceptedTypes.join(', ')}`);
 			return;
@@ -48,6 +49,13 @@
 		// Validate file size
 		if (file.size > maxFileSize) {
 			alert(`File is too large. Maximum size is ${maxFileSize / 1024 / 1024}MB`);
+			return;
+		}
+
+		// Validate file content using magic bytes (prevents MIME type spoofing)
+		const isValidImage = await validateImageFile(file);
+		if (!isValidImage) {
+			alert('Invalid image file. The file content does not match the expected image format.');
 			return;
 		}
 

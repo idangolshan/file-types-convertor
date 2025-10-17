@@ -1,10 +1,68 @@
-# sv
+# AI-Powered File Converter
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+An intelligent browser-based image converter that uses AI to recommend optimal file formats and generate accessibility features.
 
-##Screenshot
+## Features
+
+- **Smart Format Conversion**: Convert between JPG, PNG, WebP, and GIF formats
+- **AI-Powered Recommendations**: Get intelligent format suggestions based on image content
+- **Alt Text Generation**: Automatically generate descriptive alt text for accessibility
+- **Smart File Naming**: AI suggests meaningful filenames based on image content
+- **Client-Side Processing**: All conversions happen in your browser - no uploads required
+- **Beautiful UI**: Modern, gradient-based interface with drag-and-drop support
+- **Real-Time Preview**: Side-by-side comparison of original and converted images
+
+## Screenshot
 
 <img width="1657" height="866" alt="Image" src="https://github.com/user-attachments/assets/d4ebdf39-33e3-4c75-90a8-0953dad5f47b" />
+
+## Setup
+
+### Prerequisites
+
+- Node.js 24+ (required for Tailwind CSS v4)
+- Claude API key from [Anthropic Console](https://console.anthropic.com/)
+
+### Installation
+
+```sh
+# Clone the repository
+git clone https://github.com/idangolshan/file-types-convertor.git
+cd file-types-convertor
+
+# Install dependencies
+npm install
+
+# Configure AI features (optional)
+cp .env.example .env
+# Edit .env and add your Claude API key:
+# VITE_CLAUDE_API_KEY=sk-ant-...
+```
+
+### Running the App
+
+```sh
+# Start development server
+npm run dev
+
+# The app will be available at http://localhost:5175
+```
+
+## AI Features Setup
+
+The app works without an API key, but to enable AI-powered recommendations:
+
+1. Get your API key from [Anthropic Console](https://console.anthropic.com/)
+2. Copy `.env.example` to `.env`
+3. Add your key: `VITE_CLAUDE_API_KEY=sk-ant-...`
+4. Restart the dev server
+
+AI features include:
+- Format recommendations based on image characteristics
+- Reasoning for suggested formats
+- Alternative format options
+- Accessibility-focused alt text
+- SEO-friendly filename suggestions
 
 ## Creating a project
 
