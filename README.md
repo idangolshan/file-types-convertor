@@ -21,7 +21,7 @@ An intelligent browser-based image converter that uses AI to recommend optimal f
 ### Prerequisites
 
 - Node.js 24+ (required for Tailwind CSS v4)
-- Claude API key from [Anthropic Console](https://console.anthropic.com/)
+- OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-keys)
 
 ### Installation
 
@@ -35,8 +35,8 @@ npm install
 
 # Configure AI features (optional)
 cp .env.example .env
-# Edit .env and add your Claude API key:
-# VITE_CLAUDE_API_KEY=sk-ant-...
+# Edit .env and add your OpenAI API key:
+# VITE_OPENAI_API_KEY=sk-...
 ```
 
 ### Running the App
@@ -52,9 +52,9 @@ npm run dev
 
 The app works without an API key, but to enable AI-powered recommendations:
 
-1. Get your API key from [Anthropic Console](https://console.anthropic.com/)
+1. Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
 2. Copy `.env.example` to `.env`
-3. Add your key: `VITE_CLAUDE_API_KEY=sk-ant-...`
+3. Add your key: `VITE_OPENAI_API_KEY=sk-...`
 4. Restart the dev server
 
 AI features include:

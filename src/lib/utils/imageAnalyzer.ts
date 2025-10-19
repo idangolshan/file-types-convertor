@@ -3,6 +3,13 @@
  * Analyzes image characteristics locally before AI processing
  */
 
+import { loadImageFromFile } from '$lib/utils/imageLoader';
+
+// Configuration constants for color estimation
+const COLOR_SAMPLE_RATE = 10; // Sample every Nth pixel for performance
+const MAX_COLORS_THRESHOLD = 10_000; // Early exit for highly colorful images
+const MAX_RGB_COLORS = 16_777_216; // 256^3 - theoretical maximum RGB colors
+
 export interface ImageCharacteristics {
 	hasTransparency: boolean;
 	colorCount: number;
@@ -15,67 +22,40 @@ export interface ImageCharacteristics {
  * Analyze image characteristics from a File
  */
 export async function analyzeImage(file: File): Promise<ImageCharacteristics> {
-	return new Promise((resolve, reject) => {
-		const img = new Image();
-		const reader = new FileReader();
+	// Load image from file (handles memory cleanup internally)
+	const img = await loadImageFromFile(file);
 
-		reader.onload = (e) => {
-			if (!e.target?.result) {
-				reject(new Error('Failed to read file'));
-				return;
-			}
+	// Create canvas to analyze pixels
+	const canvas = document.createElement('canvas');
+	canvas.width = img.width;
+	canvas.height = img.height;
 
-			img.onload = async () => {
-				try {
-					// Create canvas to analyze pixels
-					const canvas = document.createElement('canvas');
-					canvas.width = img.width;
-					canvas.height = img.height;
+	// Optimize for pixel reading operations (checkTransparency, estimateColorCount)
+	const ctx = canvas.getContext('2d', { willReadFrequently: true });
+	if (!ctx) {
+		throw new Error('Image analysis failed: Canvas context unavailable');
+	}
 
-					const ctx = canvas.getContext('2d', { willReadFrequently: true });
-					if (!ctx) {
-						reject(new Error('Failed to get canvas context'));
-						return;
-					}
+	// Draw image
+	ctx.drawImage(img, 0, 0);
 
-					// Draw image
-					ctx.drawImage(img, 0, 0);
+	// Get image data
+	const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-					// Get image data
-					const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+	// Analyze characteristics
+	const hasTransparency = checkTransparency(imageData);
+	const colorCount = estimateColorCount(imageData);
 
-					// Analyze characteristics
-					const hasTransparency = checkTransparency(imageData);
-					const colorCount = estimateColorCount(imageData);
-
-					resolve({
-						hasTransparency,
-						colorCount,
-						dimensions: {
-							width: img.width,
-							height: img.height
-						},
-						fileSize: file.size,
-						aspectRatio: img.width / img.height
-					});
-				} catch (error) {
-					reject(error);
-				}
-			};
-
-			img.onerror = () => {
-				reject(new Error('Failed to load image'));
-			};
-
-			img.src = e.target.result as string;
-		};
-
-		reader.onerror = () => {
-			reject(new Error('Failed to read file'));
-		};
-
-		reader.readAsDataURL(file);
-	});
+	return {
+		hasTransparency,
+		colorCount,
+		dimensions: {
+			width: img.width,
+			height: img.height
+		},
+		fileSize: file.size,
+		aspectRatio: img.width / img.height
+	};
 }
 
 /**
@@ -100,9 +80,8 @@ function checkTransparency(imageData: ImageData): boolean {
 function estimateColorCount(imageData: ImageData): number {
 	const data = imageData.data;
 	const colors = new Set<string>();
-	const sampleRate = 10; // Sample every 10th pixel for performance
 
-	for (let i = 0; i < data.length; i += 4 * sampleRate) {
+	for (let i = 0; i < data.length; i += 4 * COLOR_SAMPLE_RATE) {
 		const r = data[i];
 		const g = data[i + 1];
 		const b = data[i + 2];
@@ -110,13 +89,13 @@ function estimateColorCount(imageData: ImageData): number {
 		colors.add(colorKey);
 
 		// Stop if we've found a lot of colors (indicates photo/complex image)
-		if (colors.size > 10000) {
-			return 10000; // Return early for highly colorful images
+		if (colors.size > MAX_COLORS_THRESHOLD) {
+			return MAX_COLORS_THRESHOLD;
 		}
 	}
 
 	// Estimate total colors based on sample
-	return Math.min(colors.size * sampleRate, 16777216); // Cap at max RGB colors
+	return Math.min(colors.size * COLOR_SAMPLE_RATE, MAX_RGB_COLORS);
 }
 
 /**

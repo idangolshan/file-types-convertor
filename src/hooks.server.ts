@@ -11,7 +11,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			"script-src 'self' 'unsafe-inline'", // 'unsafe-inline' needed for Svelte
 			"style-src 'self' 'unsafe-inline'", // 'unsafe-inline' needed for Svelte/Tailwind
 			"img-src 'self' blob: data:", // blob: for converted images, data: for previews
-			"connect-src 'self' https://api.anthropic.com", // Claude API
+			"connect-src 'self' https://api.openai.com", // OpenAI API
 			"font-src 'self'",
 			"object-src 'none'",
 			"base-uri 'self'",

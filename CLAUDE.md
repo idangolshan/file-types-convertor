@@ -239,13 +239,13 @@ The architecture is designed for easy extension:
 
 ## AI Features
 
-The app includes AI-powered features using Claude 3.5 Sonnet with vision capabilities.
+The app includes AI-powered features using OpenAI's GPT-4o with vision capabilities.
 
 ### Environment Setup
 
 Create a `.env` file in the project root:
 ```bash
-VITE_CLAUDE_API_KEY=sk-ant-...
+VITE_OPENAI_API_KEY=sk-...
 ```
 
 The app gracefully degrades when no API key is provided.
@@ -260,9 +260,9 @@ The app gracefully degrades when no API key is provided.
    - Estimates color count via pixel sampling
    - Provides heuristic recommendations as fallback
 
-2. **AI Enhancement** (`src/lib/services/claudeAI.ts`):
+2. **AI Enhancement** (`src/lib/services/openAI.ts`):
    - Runs in parallel with format recommendation and alt text generation
-   - Uses Claude API with base64-encoded images
+   - Uses OpenAI GPT-4o API with base64-encoded images
    - Returns structured JSON responses
 
 ### AI Features Flow
@@ -289,20 +289,19 @@ async function handleFileUpload(event: CustomEvent<File>) {
 
 **API Call Structure**:
 ```typescript
-const response = await fetch('https://api.anthropic.com/v1/messages', {
+const response = await fetch('https://api.openai.com/v1/chat/completions', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'x-api-key': CLAUDE_API_KEY,
-    'anthropic-version': '2023-06-01'
+    'Authorization': `Bearer ${OPENAI_API_KEY}`
   },
   body: JSON.stringify({
-    model: 'claude-3-5-sonnet-20241022',
+    model: 'gpt-4o',
     max_tokens: 1024,
     messages: [{
       role: 'user',
       content: [
-        { type: 'image', source: { type: 'base64', media_type: file.type, data: base64Image } },
+        { type: 'image_url', image_url: { url: base64DataURL } },
         { type: 'text', text: prompt }
       ]
     }]
@@ -313,7 +312,7 @@ const response = await fetch('https://api.anthropic.com/v1/messages', {
 **Response Parsing**:
 ```typescript
 const data = await response.json();
-const textContent = data.content[0].text;
+const textContent = data.choices[0].message.content;
 const jsonMatch = textContent.match(/\{[\s\S]*\}/);
 return JSON.parse(jsonMatch[0]);
 ```

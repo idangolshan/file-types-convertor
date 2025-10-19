@@ -3,6 +3,7 @@
 	import FormatSelector from '$lib/components/FormatSelector.svelte';
 	import PreviewPane from '$lib/components/PreviewPane.svelte';
 	import AIRecommendation from '$lib/components/AIRecommendation.svelte';
+	import ImageEditor from '$lib/components/ImageEditor.svelte';
 	import {
 		convertImage,
 		generateDownloadFilename,
@@ -15,7 +16,7 @@
 		generateAltText,
 		type AIAnalysisResult,
 		type AltTextResult
-	} from '$lib/services/claudeAI';
+	} from '$lib/services/openAI';
 	import { getExtensionFromMimeType } from '$lib/converters/imageConverter';
 
 	let selectedFile: File | null = null;
@@ -23,6 +24,10 @@
 	let convertedBlob: Blob | null = null;
 	let isConverting: boolean = false;
 	let errorMessage: string = '';
+
+	// Editor state
+	let isEditing: boolean = false;
+	let editedFile: File | null = null;
 
 	// AI features
 	let aiRecommendation: AIAnalysisResult | null = null;
@@ -35,6 +40,7 @@
 		targetFormat = ''; // Reset format selection when new file is uploaded
 		convertedBlob = null; // Reset converted image
 		errorMessage = '';
+		editedFile = null; // Reset edited file
 		aiRecommendation = null;
 		altTextData = null;
 		aiError = '';
@@ -47,8 +53,27 @@
 		if (isAIEnabled()) {
 			analyzeWithAI(selectedFile);
 		} else {
-			aiError = 'AI features disabled. Add VITE_CLAUDE_API_KEY to your .env file to enable.';
+			aiError = 'AI features disabled. Add VITE_OPENAI_API_KEY to your .env file to enable.';
 		}
+	}
+
+	function handleStartEdit() {
+		isEditing = true;
+	}
+
+	function handleEditorSave(file: File) {
+		editedFile = file;
+		selectedFile = file; // Use edited version for conversion
+		isEditing = false;
+
+		// Re-run AI analysis on edited image
+		if (isAIEnabled()) {
+			analyzeWithAI(file);
+		}
+	}
+
+	function handleEditorCancel() {
+		isEditing = false;
 	}
 
 	async function analyzeWithAI(file: File) {
@@ -142,6 +167,15 @@
 		<!-- Upload Zone -->
 		<UploadZone on:upload={handleFileUpload} />
 
+		<!-- Image Editor (Full-screen overlay) -->
+		{#if isEditing && selectedFile}
+			<ImageEditor
+				originalFile={selectedFile}
+				onSave={handleEditorSave}
+				onCancel={handleEditorCancel}
+			/>
+		{/if}
+
 		<!-- Preview, Format Selector & File Info -->
 		{#if selectedFile}
 			<div class="mt-8 space-y-6">
@@ -161,6 +195,18 @@
 						convertedBlob={convertedBlob}
 						isConverting={isConverting}
 					/>
+				</div>
+
+				<!-- Edit Image Button -->
+				<div class="flex justify-center">
+					<button
+						type="button"
+						on:click={handleStartEdit}
+						class="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+					>
+						<span class="text-xl">✏️</span>
+						Edit Image
+					</button>
 				</div>
 
 				<!-- Format Selector Card -->

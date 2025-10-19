@@ -53,8 +53,8 @@
 		}
 
 		// Validate file content using magic bytes (prevents MIME type spoofing)
-		const isValidImage = await validateImageFile(file);
-		if (!isValidImage) {
+		const validationResult = await validateImageFile(file);
+		if (!validationResult.isValid) {
 			alert('Invalid image file. The file content does not match the expected image format.');
 			return;
 		}

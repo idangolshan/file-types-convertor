@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AIAnalysisResult } from '$lib/services/claudeAI';
+	import type { AIAnalysisResult } from '$lib/services/openAI';
 
 	export let recommendation: AIAnalysisResult | null = null;
 	export let isLoading: boolean = false;
@@ -37,7 +37,7 @@
 					<h4 class="font-semibold text-yellow-900">AI Analysis Unavailable</h4>
 					<p class="text-sm text-yellow-700 mt-1">{error}</p>
 					<p class="text-xs text-yellow-600 mt-2">
-						Tip: Add your Claude API key to enable AI features
+						Tip: Add your OpenAI API key to enable AI features
 					</p>
 				</div>
 			</div>

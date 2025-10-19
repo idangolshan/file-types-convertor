@@ -3,11 +3,16 @@
  * Handles conversion between different image formats using Canvas API
  */
 
+import { loadImageFromFile } from '$lib/utils/imageLoader';
+
 export interface ConversionOptions {
 	quality?: number; // 0-1 for JPEG/WebP
 	width?: number; // Optional resize width
 	height?: number; // Optional resize height
 }
+
+// Supported output formats
+const SUPPORTED_FORMATS = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 
 /**
  * Convert an image file to a different format
@@ -21,75 +26,70 @@ export async function convertImage(
 	targetFormat: string,
 	options: ConversionOptions = {}
 ): Promise<Blob> {
+	// Validate inputs
+	if (!SUPPORTED_FORMATS.includes(targetFormat as any)) {
+		throw new Error(
+			`Image conversion failed: Unsupported format "${targetFormat}". Supported formats: ${SUPPORTED_FORMATS.join(', ')}`
+		);
+	}
+
 	const { quality = 0.92, width, height } = options;
 
-	return new Promise((resolve, reject) => {
-		// Create an image element
-		const img = new Image();
-		const reader = new FileReader();
+	if (quality < 0 || quality > 1) {
+		throw new Error(
+			`Image conversion failed: Invalid quality value ${quality}. Must be between 0 and 1.`
+		);
+	}
 
-		reader.onload = (e) => {
-			if (!e.target?.result) {
-				reject(new Error('Failed to read file'));
+	// Load image from file (handles memory cleanup internally)
+	const img = await loadImageFromFile(file);
+
+	return new Promise((resolve, reject) => {
+		try {
+			// Calculate dimensions
+			let targetWidth = width || img.width;
+			let targetHeight = height || img.height;
+
+			// Maintain aspect ratio if only one dimension is specified
+			if (width && !height) {
+				targetHeight = (img.height / img.width) * width;
+			} else if (height && !width) {
+				targetWidth = (img.width / img.height) * height;
+			}
+
+			// Create canvas
+			const canvas = document.createElement('canvas');
+			canvas.width = targetWidth;
+			canvas.height = targetHeight;
+
+			const ctx = canvas.getContext('2d');
+			if (!ctx) {
+				reject(
+					new Error(
+						'Image conversion failed: Canvas context unavailable (browser compatibility issue)'
+					)
+				);
 				return;
 			}
 
-			img.onload = () => {
-				try {
-					// Calculate dimensions
-					let targetWidth = width || img.width;
-					let targetHeight = height || img.height;
+			// Draw image on canvas
+			ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-					// Maintain aspect ratio if only one dimension is specified
-					if (width && !height) {
-						targetHeight = (img.height / img.width) * width;
-					} else if (height && !width) {
-						targetWidth = (img.width / img.height) * height;
+			// Convert to blob with target format
+			canvas.toBlob(
+				(blob) => {
+					if (blob) {
+						resolve(blob);
+					} else {
+						reject(new Error(`Image conversion failed: Unable to encode as ${targetFormat}`));
 					}
-
-					// Create canvas
-					const canvas = document.createElement('canvas');
-					canvas.width = targetWidth;
-					canvas.height = targetHeight;
-
-					const ctx = canvas.getContext('2d');
-					if (!ctx) {
-						reject(new Error('Failed to get canvas context'));
-						return;
-					}
-
-					// Draw image on canvas
-					ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-					// Convert to blob with target format
-					canvas.toBlob(
-						(blob) => {
-							if (blob) {
-								resolve(blob);
-							} else {
-								reject(new Error('Failed to convert image'));
-							}
-						},
-						targetFormat,
-						quality
-					);
-				} catch (error) {
-					reject(error);
-				}
-			};
-
-			img.onerror = () => {
-				reject(new Error('Failed to load image'));
-			};
-
-			img.src = e.target.result as string;
-		};
-
-		reader.onerror = () => {
-			reject(new Error('Failed to read file'));
-		};
-
-		reader.readAsDataURL(file);
+				},
+				targetFormat,
+				quality
+			);
+		} catch (error) {
+			reject(error);
+		}
 	});
 }
 
