@@ -136,16 +136,22 @@ Image characteristics:
 
 Available formats: JPEG, PNG, WebP, GIF
 
+IMPORTANT file size considerations:
+- WebP is generally the best choice: same quality as JPEG but 30-80% smaller, supports transparency
+- Converting lossy (JPEG) to lossless (PNG) causes 5-15x file size increase
+- If transparency detected, explain that WebP supports it in all modern browsers
+- Include specific estimated file size impact in your reasoning (e.g., "60% smaller than PNG")
+
 Provide:
-1. Primary recommendation (just the format name)
-2. Clear reasoning (2-3 bullet points)
+1. Primary recommendation (just the format name: "JPEG", "PNG", "WebP", or "GIF")
+2. Clear reasoning that includes file size benefits (2-3 sentences)
 3. Alternative format suggestions
-4. Any warnings or considerations
+4. Warnings about file size increases if converting to larger formats
 
 Format your response as JSON:
 {
   "formatRecommendation": "FORMAT",
-  "reasoning": "Why this format is best...",
+  "reasoning": "Why this format is best, including file size impact...",
   "alternatives": ["format1", "format2"],
   "warnings": ["warning1 if any"]
 }`;

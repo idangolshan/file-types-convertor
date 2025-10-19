@@ -34,6 +34,7 @@
 	let altTextData: AltTextResult | null = null;
 	let isAnalyzing: boolean = false;
 	let aiError: string = '';
+	let hasTransparency: boolean = false;
 
 	async function handleFileUpload(event: CustomEvent<File>) {
 		selectedFile = event.detail;
@@ -83,6 +84,9 @@
 		try {
 			// Analyze image characteristics locally
 			const characteristics = await analyzeImage(file);
+
+			// Store transparency info for UI
+			hasTransparency = characteristics.hasTransparency;
 
 			// Get AI recommendations and alt text in parallel
 			const [recommendation, altText] = await Promise.all([
@@ -186,6 +190,7 @@
 					error={aiError}
 					altText={altTextData?.description || ''}
 					suggestedFilename={altTextData?.suggestedFilename || ''}
+					hasTransparency={hasTransparency}
 				/>
 
 				<!-- Preview Pane Card -->
@@ -214,6 +219,7 @@
 					<FormatSelector
 						sourceFormat={selectedFile.type}
 						selectedFormat={targetFormat}
+						aiRecommendation={aiRecommendation?.formatRecommendation || null}
 						on:select={handleFormatSelect}
 					/>
 				</div>

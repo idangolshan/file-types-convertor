@@ -6,6 +6,7 @@
 	export let error: string = '';
 	export let altText: string = '';
 	export let suggestedFilename: string = '';
+	export let hasTransparency: boolean = false;
 
 	function copyAltText() {
 		if (altText) {
@@ -57,6 +58,23 @@
 							<p class="font-medium mb-1">Why this format:</p>
 							<p class="text-purple-700">{recommendation.reasoning}</p>
 						</div>
+
+						<!-- WebP Benefits Tooltip -->
+						{#if recommendation.formatRecommendation.toUpperCase() === 'WEBP'}
+							<div class="bg-blue-50 border border-blue-200 rounded p-3">
+								<p class="text-sm text-blue-800">
+									<strong>💡 Why WebP?</strong>
+									WebP keeps the same quality as JPG, but with 30–80% smaller file size. Supported
+									in all modern browsers (Chrome, Firefox, Edge, Safari 14+).
+								</p>
+								{#if hasTransparency}
+									<p class="text-xs text-blue-700 mt-2">
+										ℹ️ WebP also supports transparency, making it a great alternative to PNG with much
+										smaller file sizes.
+									</p>
+								{/if}
+							</div>
+						{/if}
 
 						<!-- Alternatives -->
 						{#if recommendation.alternatives && recommendation.alternatives.length > 0}
