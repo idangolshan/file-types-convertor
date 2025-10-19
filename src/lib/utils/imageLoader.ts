@@ -5,7 +5,7 @@
 
 /**
  * Load an HTMLImageElement from a File object
- * Properly manages memory by clearing data URL references after loading
+ * Uses object URLs for memory efficiency and automatic cleanup
  *
  * @param file - The image file to load
  * @returns Promise resolving to loaded HTMLImageElement
@@ -20,31 +20,21 @@
 export async function loadImageFromFile(file: File): Promise<HTMLImageElement> {
 	return new Promise((resolve, reject) => {
 		const img = new Image();
-		const reader = new FileReader();
+		// Use object URL instead of data URL (faster and more memory efficient)
+		const objectUrl = URL.createObjectURL(file);
 
-		reader.onload = (e) => {
-			if (!e.target?.result) {
-				reject(new Error('Image loading failed: Could not read file data'));
-				return;
-			}
-
-			img.onload = () => {
-				// Image loaded successfully - caller must use it immediately
-				// Note: We don't clear img.src here because the caller needs the image data
-				resolve(img);
-			};
-
-			img.onerror = () => {
-				reject(new Error('Image loading failed: Invalid or corrupted image file'));
-			};
-
-			img.src = e.target.result as string;
+		img.onload = () => {
+			// Clean up object URL immediately after loading to prevent memory leaks
+			URL.revokeObjectURL(objectUrl);
+			resolve(img);
 		};
 
-		reader.onerror = () => {
-			reject(new Error('Image loading failed: Could not read file data'));
+		img.onerror = () => {
+			// Clean up object URL on error too
+			URL.revokeObjectURL(objectUrl);
+			reject(new Error('Image loading failed: Invalid or corrupted image file'));
 		};
 
-		reader.readAsDataURL(file);
+		img.src = objectUrl;
 	});
 }

@@ -10,7 +10,7 @@
 		ArrowElement,
 		TextElement
 	} from '$lib/types/drawing';
-	import { renderAllElements, getElementAtPoint } from '$lib/utils/drawingEngine';
+	import { renderAllElements, scheduleRender, getElementAtPoint } from '$lib/utils/drawingEngine';
 	import { mergeCanvasLayers, canvasToFile } from '$lib/utils/canvasExport';
 
 	// Props
@@ -52,31 +52,49 @@
 	 * Initialize canvases and load image
 	 */
 	onMount(async () => {
-		// Load the image
-		const img = await loadImageFromFile(originalFile);
+		try {
+			// Load the image
+			const img = await loadImageFromFile(originalFile);
 
-		// Set canvas dimensions to match image
-		const width = img.width;
-		const height = img.height;
+			// Validate image dimensions
+			if (img.width === 0 || img.height === 0) {
+				throw new Error('Invalid image dimensions');
+			}
 
-		imageCanvas.width = width;
-		imageCanvas.height = height;
-		drawingCanvas.width = width;
-		drawingCanvas.height = height;
+			// Check canvas size limits (browser dependent, typically 32767px)
+			const maxDimension = 16384; // Safe limit for most browsers
+			if (img.width > maxDimension || img.height > maxDimension) {
+				throw new Error(`Image too large. Maximum dimension is ${maxDimension}px`);
+			}
 
-		// Get contexts
-		imageCtx = imageCanvas.getContext('2d');
-		drawingCtx = drawingCanvas.getContext('2d');
+			// Set canvas dimensions to match image
+			const width = img.width;
+			const height = img.height;
 
-		if (!imageCtx || !drawingCtx) {
-			throw new Error('Failed to get canvas contexts');
+			imageCanvas.width = width;
+			imageCanvas.height = height;
+			drawingCanvas.width = width;
+			drawingCanvas.height = height;
+
+			// Get contexts
+			imageCtx = imageCanvas.getContext('2d');
+			drawingCtx = drawingCanvas.getContext('2d');
+
+			if (!imageCtx || !drawingCtx) {
+				throw new Error('Failed to get canvas contexts');
+			}
+
+			// Draw the image on the image layer
+			imageCtx.drawImage(img, 0, 0);
+
+			// Set up keyboard shortcuts
+			window.addEventListener('keydown', handleKeyDown);
+		} catch (error) {
+			console.error('Failed to initialize image editor:', error);
+			const message = error instanceof Error ? error.message : 'Failed to load image';
+			alert(`Editor initialization failed: ${message}\n\nPlease try with a different image.`);
+			onCancel(); // Close editor on initialization failure
 		}
-
-		// Draw the image on the image layer
-		imageCtx.drawImage(img, 0, 0);
-
-		// Set up keyboard shortcuts
-		window.addEventListener('keydown', handleKeyDown);
 	});
 
 	onDestroy(() => {
@@ -84,26 +102,28 @@
 	});
 
 	/**
-	 * Load image from File
+	 * Load image from File using object URL (memory efficient)
+	 * Automatically cleans up object URL after loading to prevent memory leaks
 	 */
 	function loadImageFromFile(file: File): Promise<HTMLImageElement> {
 		return new Promise((resolve, reject) => {
 			const img = new Image();
-			const reader = new FileReader();
+			// Use object URL instead of data URL (faster and more memory efficient)
+			const objectUrl = URL.createObjectURL(file);
 
-			reader.onload = (e) => {
-				if (!e.target?.result) {
-					reject(new Error('Failed to read file'));
-					return;
-				}
-
-				img.onload = () => resolve(img);
-				img.onerror = () => reject(new Error('Failed to load image'));
-				img.src = e.target.result as string;
+			img.onload = () => {
+				// Clean up object URL immediately after loading
+				URL.revokeObjectURL(objectUrl);
+				resolve(img);
 			};
 
-			reader.onerror = () => reject(new Error('Failed to read file'));
-			reader.readAsDataURL(file);
+			img.onerror = () => {
+				// Clean up object URL on error too
+				URL.revokeObjectURL(objectUrl);
+				reject(new Error('Failed to load image'));
+			};
+
+			img.src = objectUrl;
 		});
 	}
 
@@ -125,6 +145,8 @@
 	 * Handle pointer down (start drawing)
 	 */
 	function handlePointerDown(e: PointerEvent) {
+		if (!drawingCtx) return; // Prevent race condition - wait for canvas init
+
 		e.preventDefault();
 		isDrawing = true;
 		const point = getCanvasPoint(e);
@@ -214,8 +236,8 @@
 			currentElement.endY = point.y;
 		}
 
-		// Render all elements including current one
-		renderAllElements(drawingCtx, [...drawingElements, currentElement]);
+		// Schedule render for performance (throttled to browser refresh rate)
+		scheduleRender(drawingCtx, [...drawingElements, currentElement]);
 	}
 
 	/**
@@ -262,12 +284,19 @@
 			return;
 		}
 
+		// Validate text length (max 500 characters for performance)
+		const trimmedText = textInputValue.trim();
+		if (trimmedText.length > 500) {
+			alert('Text is too long. Maximum 500 characters allowed.');
+			return;
+		}
+
 		const textElement: TextElement = {
 			type: 'text',
 			id: crypto.randomUUID(),
 			x: startPoint.x,
 			y: startPoint.y,
-			text: textInputValue,
+			text: trimmedText,
 			color: currentColor,
 			fontSize: currentThickness * 8, // Scale font size with thickness
 			fontFamily: 'Arial, sans-serif'
@@ -283,13 +312,14 @@
 
 	/**
 	 * Save current state to history (for undo/redo)
+	 * Uses structuredClone for better performance than JSON methods
 	 */
 	function saveState() {
 		// Remove any "future" history if we're not at the end
 		history = history.slice(0, historyIndex + 1);
 
-		// Add current state (deep copy)
-		history = [...history, JSON.parse(JSON.stringify(drawingElements))];
+		// Add current state (deep copy using structuredClone - faster than JSON)
+		history = [...history, structuredClone(drawingElements)];
 		historyIndex++;
 
 		// Limit history to 50 entries to prevent memory bloat
@@ -305,7 +335,7 @@
 	function undo() {
 		if (historyIndex > 0 && drawingCtx) {
 			historyIndex--;
-			drawingElements = JSON.parse(JSON.stringify(history[historyIndex]));
+			drawingElements = structuredClone(history[historyIndex]);
 			renderAllElements(drawingCtx, drawingElements);
 		}
 	}
@@ -316,7 +346,7 @@
 	function redo() {
 		if (historyIndex < history.length - 1 && drawingCtx) {
 			historyIndex++;
-			drawingElements = JSON.parse(JSON.stringify(history[historyIndex]));
+			drawingElements = structuredClone(history[historyIndex]);
 			renderAllElements(drawingCtx, drawingElements);
 		}
 	}
@@ -401,9 +431,9 @@
 			// Merge the two canvas layers
 			const merged = mergeCanvasLayers(imageCanvas, drawingCanvas);
 
-			// Export to File
+			// Export to File (PNG is lossless, quality parameter is ignored)
 			const filename = originalFile.name.replace(/\.[^/.]+$/, '_edited.png');
-			const editedFile = await canvasToFile(merged, filename, 'image/png');
+			const editedFile = await canvasToFile(merged, filename, 'image/png', 1.0);
 
 			// Callback to parent
 			onSave(editedFile);
@@ -428,18 +458,20 @@
 	}
 </script>
 
-<div class="editor-overlay">
+<div class="editor-overlay" role="dialog" aria-label="Image Editor">
 	<div class="editor-container">
 		<!-- Toolbar -->
-		<div class="toolbar">
+		<div class="toolbar" role="toolbar" aria-label="Drawing tools">
 			<div class="toolbar-section">
 				<h3 class="toolbar-title">Tools</h3>
-				<div class="tool-buttons">
+				<div class="tool-buttons" role="group" aria-label="Drawing tool selection">
 					<button
 						class="tool-btn"
 						class:active={currentTool === 'pen'}
 						on:click={() => (currentTool = 'pen')}
 						title="Pen (P)"
+						aria-label="Pen tool"
+						aria-pressed={currentTool === 'pen'}
 					>
 						✏️ Pen
 					</button>
@@ -448,6 +480,8 @@
 						class:active={currentTool === 'rectangle'}
 						on:click={() => (currentTool = 'rectangle')}
 						title="Rectangle (R)"
+						aria-label="Rectangle tool"
+						aria-pressed={currentTool === 'rectangle'}
 					>
 						⬜ Rect
 					</button>
@@ -456,6 +490,8 @@
 						class:active={currentTool === 'circle'}
 						on:click={() => (currentTool = 'circle')}
 						title="Circle (C)"
+						aria-label="Circle tool"
+						aria-pressed={currentTool === 'circle'}
 					>
 						⭕ Circle
 					</button>
@@ -464,6 +500,8 @@
 						class:active={currentTool === 'arrow'}
 						on:click={() => (currentTool = 'arrow')}
 						title="Arrow (A)"
+						aria-label="Arrow tool"
+						aria-pressed={currentTool === 'arrow'}
 					>
 						➡️ Arrow
 					</button>
@@ -472,6 +510,8 @@
 						class:active={currentTool === 'text'}
 						on:click={() => (currentTool = 'text')}
 						title="Text (T)"
+						aria-label="Text tool"
+						aria-pressed={currentTool === 'text'}
 					>
 						🔤 Text
 					</button>
@@ -480,6 +520,8 @@
 						class:active={currentTool === 'eraser'}
 						on:click={() => (currentTool = 'eraser')}
 						title="Eraser (E)"
+						aria-label="Eraser tool"
+						aria-pressed={currentTool === 'eraser'}
 					>
 						🗑️ Eraser
 					</button>
@@ -488,7 +530,12 @@
 
 			<div class="toolbar-section">
 				<h3 class="toolbar-title">Color</h3>
-				<input type="color" bind:value={currentColor} class="color-picker" />
+				<input
+					type="color"
+					bind:value={currentColor}
+					class="color-picker"
+					aria-label="Drawing color"
+				/>
 			</div>
 
 			<div class="toolbar-section">
@@ -499,12 +546,23 @@
 					max="20"
 					bind:value={currentThickness}
 					class="thickness-slider"
+					aria-label="Line thickness"
+					aria-valuemin="1"
+					aria-valuemax="20"
+					aria-valuenow={currentThickness}
+					aria-valuetext="{currentThickness} pixels"
 				/>
 			</div>
 
 			<div class="toolbar-section">
 				<div class="action-buttons">
-					<button on:click={undo} disabled={historyIndex === 0} class="action-btn" title="Undo (Ctrl+Z)">
+					<button
+						on:click={undo}
+						disabled={historyIndex === 0}
+						class="action-btn"
+						title="Undo (Ctrl+Z)"
+						aria-label="Undo last action"
+					>
 						↶ Undo
 					</button>
 					<button
@@ -512,10 +570,11 @@
 						disabled={historyIndex === history.length - 1}
 						class="action-btn"
 						title="Redo (Ctrl+Y)"
+						aria-label="Redo last undone action"
 					>
 						↷ Redo
 					</button>
-					<button on:click={clearAll} class="action-btn danger">
+					<button on:click={clearAll} class="action-btn danger" aria-label="Clear all drawings">
 						🗑️ Clear All
 					</button>
 				</div>
@@ -523,8 +582,8 @@
 		</div>
 
 		<!-- Canvas Container -->
-		<div class="canvas-wrapper">
-			<canvas bind:this={imageCanvas} class="image-layer"></canvas>
+		<div class="canvas-wrapper" role="application" aria-label="Drawing canvas area">
+			<canvas bind:this={imageCanvas} class="image-layer" aria-hidden="true"></canvas>
 			<canvas
 				bind:this={drawingCanvas}
 				class="drawing-layer"
@@ -536,6 +595,9 @@
 				on:touchstart|preventDefault={handleTouchStart}
 				on:touchmove|preventDefault={handleTouchMove}
 				on:touchend={handleTouchEnd}
+				on:contextmenu|preventDefault
+				aria-label="Image editor canvas. Use drawing tools from the toolbar to add shapes, text, or annotations."
+				tabindex="0"
 			></canvas>
 		</div>
 
@@ -550,11 +612,13 @@
 					bind:value={textInputValue}
 					placeholder="Enter text..."
 					class="text-input"
+					maxlength="500"
 					on:keydown={(e) => {
 						if (e.key === 'Enter') handleTextSubmit();
 						if (e.key === 'Escape') (showTextInput = false);
 					}}
 					use:focusInput
+					aria-label="Text content for annotation"
 				/>
 				<div class="text-input-actions">
 					<button on:click={handleTextSubmit} class="btn-sm btn-primary">Add</button>
@@ -565,10 +629,10 @@
 
 		<!-- Bottom Actions -->
 		<div class="bottom-actions">
-			<button on:click={handleCancelClick} class="btn-secondary">
+			<button on:click={handleCancelClick} class="btn-secondary" aria-label="Cancel editing and discard changes">
 				Cancel
 			</button>
-			<button on:click={handleApply} class="btn-primary">
+			<button on:click={handleApply} class="btn-primary" aria-label="Apply changes and continue">
 				Apply & Continue
 			</button>
 		</div>
