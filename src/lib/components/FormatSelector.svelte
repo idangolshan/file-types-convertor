@@ -104,6 +104,11 @@
 		{/each}
 	</div>
 
+	<!-- Size Estimates Disclaimer -->
+	<div class="mt-3 p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600">
+		<span class="font-medium">ℹ️ Note:</span> Size indicators are general estimates. Actual file size depends on image content, quality settings, and compression. Precise results shown after conversion.
+	</div>
+
 	{#if selectedFormat}
 		<div class="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
 			<p class="text-sm text-green-800">
