@@ -8,6 +8,9 @@
 	let originalPreview: string = '';
 	let convertedPreview: string = '';
 
+	// Check if converted output is a PDF
+	$: isPDF = convertedBlob?.type === 'application/pdf';
+
 	// Calculate size difference percentage
 	$: sizeDiff =
 		originalFile && convertedBlob
@@ -65,9 +68,11 @@
 			</div>
 		</div>
 
-		<!-- Converted Image -->
+		<!-- Converted Output -->
 		<div class="space-y-2">
-			<h4 class="text-sm font-medium text-gray-600">Converted</h4>
+			<h4 class="text-sm font-medium text-gray-600">
+				{isPDF ? 'Converted PDF' : 'Converted'}
+			</h4>
 			<div
 				class="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border-2 {convertedBlob
 					? 'border-green-500'
@@ -82,7 +87,19 @@
 							<p class="mt-4 text-gray-600">Converting...</p>
 						</div>
 					</div>
+				{:else if convertedPreview && isPDF}
+					<!-- PDF Preview using iframe -->
+					<iframe
+						src={convertedPreview}
+						title="PDF Preview"
+						class="w-full h-full border-0"
+					></iframe>
+					<div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2">
+						<p class="text-xs">PDF Document</p>
+						<p class="text-xs">{((convertedBlob?.size || 0) / 1024).toFixed(2)} KB</p>
+					</div>
 				{:else if convertedPreview}
+					<!-- Image Preview -->
 					<img
 						src={convertedPreview}
 						alt="Converted"
@@ -94,7 +111,7 @@
 					</div>
 				{:else}
 					<div class="flex items-center justify-center h-full text-gray-400">
-						<p>Converted image will appear here</p>
+						<p>Converted output will appear here</p>
 					</div>
 				{/if}
 			</div>

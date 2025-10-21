@@ -101,7 +101,8 @@ export function getExtensionFromMimeType(mimeType: string): string {
 		'image/jpeg': '.jpg',
 		'image/png': '.png',
 		'image/webp': '.webp',
-		'image/gif': '.gif'
+		'image/gif': '.gif',
+		'application/pdf': '.pdf'
 	};
 	return extensions[mimeType] || '.jpg';
 }

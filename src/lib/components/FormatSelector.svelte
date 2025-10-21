@@ -7,12 +7,13 @@
 
 	const dispatch = createEventDispatcher<{ select: string }>();
 
-	// Available image formats
+	// Available output formats
 	const formats = [
 		{ value: 'image/jpeg', label: 'JPG', ext: '.jpg' },
 		{ value: 'image/png', label: 'PNG', ext: '.png' },
 		{ value: 'image/webp', label: 'WebP', ext: '.webp' },
-		{ value: 'image/gif', label: 'GIF', ext: '.gif' }
+		{ value: 'image/gif', label: 'GIF', ext: '.gif' },
+		{ value: 'application/pdf', label: 'PDF', ext: '.pdf' }
 	];
 
 	// Filter out the source format from available conversions
@@ -27,6 +28,11 @@
 	 * Get file size indicator based on source and target formats
 	 */
 	function getSizeIndicator(source: string, target: string): string {
+		// PDF conversions are typically larger
+		if (target === 'application/pdf') {
+			return '📈 Larger (~10-20%)';
+		}
+
 		const lossy = ['image/jpeg', 'image/webp'];
 		const lossless = ['image/png', 'image/gif'];
 

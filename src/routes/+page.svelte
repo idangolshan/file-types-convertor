@@ -4,11 +4,13 @@
 	import PreviewPane from '$lib/components/PreviewPane.svelte';
 	import AIRecommendation from '$lib/components/AIRecommendation.svelte';
 	import ImageEditor from '$lib/components/ImageEditor.svelte';
+	import PDFOptions from '$lib/components/PDFOptions.svelte';
 	import {
 		convertImage,
 		generateDownloadFilename,
 		downloadBlob
 	} from '$lib/converters/imageConverter';
+	import { convertImageToPDF } from '$lib/converters/pdfConverter';
 	import { analyzeImage } from '$lib/utils/imageAnalyzer';
 	import {
 		isAIEnabled,
@@ -28,6 +30,10 @@
 	// Editor state
 	let isEditing: boolean = false;
 	let editedFile: File | null = null;
+
+	// PDF conversion state
+	let pdfPageSize: 'A4' | 'original' = 'original';
+	let pdfOrientation: 'portrait' | 'landscape' = 'portrait';
 
 	// AI features
 	let aiRecommendation: AIAnalysisResult | null = null;
@@ -119,6 +125,14 @@
 		if (DEBUG) console.log('Target format:', targetFormat);
 	}
 
+	function handlePDFOptionsChange(
+		event: CustomEvent<{ pageSize: 'A4' | 'original'; orientation: 'portrait' | 'landscape' }>
+	) {
+		pdfPageSize = event.detail.pageSize;
+		pdfOrientation = event.detail.orientation;
+		convertedBlob = null; // Reset converted output when options change
+	}
+
 	async function handleConvert() {
 		if (!selectedFile || !targetFormat) return;
 
@@ -126,9 +140,18 @@
 		errorMessage = '';
 
 		try {
-			convertedBlob = await convertImage(selectedFile, targetFormat, {
-				quality: 0.92
-			});
+			// Route to appropriate converter based on target format
+			if (targetFormat === 'application/pdf') {
+				convertedBlob = await convertImageToPDF(selectedFile, {
+					pageSize: pdfPageSize,
+					orientation: pdfOrientation,
+					quality: 0.92
+				});
+			} else {
+				convertedBlob = await convertImage(selectedFile, targetFormat, {
+					quality: 0.92
+				});
+			}
 			// Only log in development mode
 			const DEBUG = import.meta.env.DEV;
 			if (DEBUG) console.log('Conversion successful!');
@@ -223,6 +246,15 @@
 						on:select={handleFormatSelect}
 					/>
 				</div>
+
+				<!-- PDF Options (only shown when PDF is selected) -->
+				{#if targetFormat === 'application/pdf'}
+					<PDFOptions
+						pageSize={pdfPageSize}
+						orientation={pdfOrientation}
+						on:change={handlePDFOptionsChange}
+					/>
+				{/if}
 
 				<!-- Action Buttons -->
 				{#if targetFormat}

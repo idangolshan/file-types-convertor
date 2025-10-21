@@ -25,6 +25,7 @@
 		"vite": "^7.1.7"
 	},
 	"dependencies": {
-		"openai": "^6.5.0"
+		"openai": "^6.5.0",
+		"pdf-lib": "^1.17.1"
 	}
 }
